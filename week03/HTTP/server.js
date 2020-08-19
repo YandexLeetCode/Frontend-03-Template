@@ -14,14 +14,14 @@ http.createServer((request, response) => {
    `<html maaa=a >
    <head>
       <style>
-      body div #myid{
-        width: 100px;
-        background-color: #ff5000;
+      body width #mid {
+        heigh: 10px
+        background-color:#fff
       }
       </style>
    </head>
     <body>
-    <hl>aaa</h1>
+    <h1>aaa</h1>
     </body>
     </html>`);
   });
