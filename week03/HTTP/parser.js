@@ -1,7 +1,112 @@
+const css = require("css");
+
 let currentAttribute = null;
 let currentToken = null;
 let stack = [{type: "document", children:[]}];
 let currentTextNode = null;
+function specificity(selector) {
+    var p = [0,0,0,0];
+    var selectorParts = selector.split(" ");
+    for(var part of selectorParts) {
+        if(part.charAt(0) === "#") {
+            p[1] += 1;
+        } else if(part.charAt(0) === ".") {
+            p[2] += 1;
+        } else {
+            p[3] += 1;
+        }
+    }
+    return p;
+}
+function compare(sp1, sp2) {
+    if(sp1[0] - sp2[0]) {
+        return sp1[0] - sp2[0];
+    }
+    if(sp1[1] - sp2[1]) {
+        return sp1[1] - sp2[1];
+    }
+    if(sp1[2] - sp2[2]) {
+        return sp1[2] - sp2[2];
+    }
+
+    return sp1[3] - sp2[3];
+}
+// 增加 css 规则
+let rules = [];
+function addCSSRules(text){
+    var ast = css.parse(text);
+    // console.log(JSON.stringify(ast, null ,"     "));
+    rules.push(...ast.stylesheet.rules);
+}
+function match(element, selector) {
+    if(!selector|| !element.attributes){
+        return false;
+    }
+    // 匹配 ID 选择器
+    if(selector.charAt(0) === "#") {
+       var attr = element.attributes.filter(attr => attr.name === "id")[0];
+       if(attr && attr.value === selector.replace("#",'')){
+           return true;
+       }
+    } else if(selector.charAt(0) === ".") {
+        // 匹配 CLASS 选择器
+        var attr = element.attributes.filter(attr => attr.name === "class")[0];
+        if(attr && attr.value === selector.replace(".", '')) {
+            return true;
+        }
+    } else {
+        if(element.tagName === selector) {
+            return true;
+        }
+    }
+    return false;
+}
+function computeCSS(element) {
+    // slice 根据传递字符 截断,如果不传数据 则复制整个串
+    // reverse 从当前元素往外匹配 父元素
+    var elements = stack.slice().reverse();
+    if(!element.computedStyle){
+        element.computedStyle = {};
+    }
+    // 处理选择器
+    for(let rule of rules) {
+        var selectorParts = rule.selectors[0].split(" ").reverse();
+        if(!match(element,selectorParts[0])){
+            continue;
+        }
+        let matched = false;
+        var j = 1;
+        // 元素 ,主要是 看此选择器作用是否在此元素上,进行的匹配
+        for(var i = 0; i < elements.length; i++) {
+            if(match(elements[i], selectorParts[j])) {
+                j++;
+            }
+        }
+        if(j >= selectorParts.length) {
+            matched = true;
+        }
+
+        if(matched) {
+            // 如果匹配上 则应用样式
+            // console.log("element ",element, "matched rule", rule);
+            var sp = specificity(rule.selectors[0]);
+            var computedStyle = element.computedStyle;
+            for(var declaration of rule.declarations) {
+                if(!computedStyle[declaration.property]){
+                    computedStyle[declaration.property] = {}
+                }
+
+                if(!computedStyle[declaration.property].specificity) {
+                    computedStyle[declaration.property].value = declaration.value;
+                    computedStyle[declaration.property].specificity = sp;
+                } else if(compare(computedStyle[declaration.property].specificity, sp) < 0){
+                    computedStyle[declaration.property].value = declaration.value;
+                    computedStyle[declaration.property].specificity = sp;
+                }
+            }
+        }
+    }
+}
 
 function emit(token) {
     let top = stack[stack.length - 1];
@@ -23,6 +128,9 @@ function emit(token) {
                 });
             }
         }
+        // 计算 CSS 样式规则
+        computeCSS(element)
+
         top.children.push(element);
         element.parent = top;
 
@@ -35,6 +143,10 @@ function emit(token) {
         if(top.tagName !== token.tagName) {
             throw new Error("Tag start end doesn't match!");
         } else {
+            // 执行css 标签规则 
+            if(top.tagName === "style"){
+                addCSSRules(top.children[0].content);
+            }
             stack.pop();
         }
         currentTextNode = null;
@@ -145,13 +257,14 @@ function attributeName(c) {
     }
 
 }
+// 属性名称 之后 拼接属性值
 function beforeAttributeValue(c) {
     if(c.match(/^[\t\n\f ]$/) || c === "/" || c === ">" || c === EOF) {
         return beforeAttributeValue;
     } else if (c === "\"") {
         return doubleQuotedAttributeValue;
     } else if(c === "\'") {
-        return singleQuotedAttributeValue;
+        return singleQuotedAttributeValue(c);
     } else if(c === ">") {
         
     } else {
@@ -159,15 +272,19 @@ function beforeAttributeValue(c) {
     }
 }
 function doubleQuotedAttributeValue(c) {
-    if(c === "\"") {
-        currentTokenp[currentAttribute.name] = currentAttribute.value;
-        return afterQuotedAttributeValue;
-    } else if(c === "\u0000") {
+    if(c.match(/^[\t\n\f ]$/) || c === "\"" || c === "/"){
+        currentToken[currentAttribute.name] = currentAttribute.value;
+        return doubleQuotedAttributeValue;
+    } else if(c === ">") {
+        return afterAttributeName(c);
+    }
+    else if(c === "\u0000") {
 
     } else if(c === EOF) {
         
     } else {
-
+        currentAttribute.value += c;
+        return doubleQuotedAttributeValue;
     }
 }
 function singleQuotedAttributeValue(c) {
@@ -184,8 +301,8 @@ function singleQuotedAttributeValue(c) {
     }
 }
 function afterQuotedAttributeValue(c) {
-    if(c.match(/^[\t\n\f]$/)) {
-        return beforeAttributeValue;
+    if(c.match(/^[\t\n\f ]$/)) {
+        return beforeAttributeName;
     } else if(c === "/") {
         return selfClosingStartTag;
     } else if(c === ">"){
@@ -261,5 +378,5 @@ module.exports.parseHTML = function parseHTML(html) {
     }
 
     state = state(EOF)
-    console.log(stack[0])
+    return stack[0];
 }
