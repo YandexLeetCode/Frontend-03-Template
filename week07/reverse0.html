@@ -1,0 +1,47 @@
+<div id="a">
+    <span>1</span>
+    <p>2</p>
+    <p>3</p>
+    <div>4</div>
+</div>
+
+<script>
+    let element = document.getElementById('a');
+    
+    // T1 解决方法
+    // function reverseChildren(element) {
+    //     let children = Array.prototype.slice.call(element.childNodes);
+
+    //     for(let child of children) {
+    //         element.removeChild(child);
+    //     }
+
+    //     children.reverse();
+
+    //     for(let child of children) {
+    //         element.appendChild(child);
+    //     }
+    // }
+    // T2 解决方法,DOM 节点从后往前增加 他会将对应位置的数据直接移除 然后新增,无需开发者调用remove操作
+    // function reverseChildren(element) {
+    //     var l  = element.childNodes.length;
+    //     while( l-- > 0) {
+    //         element.appendChild(element.childNodes[l])
+    //     }
+    // }
+    // T3 使用 range 方式进行 操作
+    function reverseChildren(element) {
+        let range = new Range();
+        range.selectNodeContents(element);
+        // 不去操作实际的DOM 先使用 range 将需要操作的节点 取出来,他可以细化到 操作节点,然后进行排序 算法操作,最后append 到DOM 上
+        let fragment = range.extractContents();
+        var l = fragment.childNodes.length;
+        while( l-- > 0) {
+            fragment.appendChild(fragment.childNodes[l])
+        }
+        element.appendChild(fragment);
+    }
+
+
+    reverseChildren(element);
+</script>

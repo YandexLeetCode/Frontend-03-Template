@@ -1,0 +1,28 @@
+<script>
+    let names = Object.getOwnPropertyNames(window);
+
+    function filterOut(names,props) {
+        let set = new Set();
+        props.forEach(o => set.add(o));
+        return names.filter(e => !set.has(e))
+    }
+    
+    {
+        let js = new Set();
+        let objects = ["globalThis","console","BigInt","BigInt64Array","BigUint64Array","Infinity","NaN","undefined","eval"];
+        objects.forEach(o => js.add(o));
+        names = names.filter(e => !js.has(e))
+    }
+    names = names.filter( e => {
+        try {
+            return !(window[e].prototype instanceof Node)
+        } catch (err) {
+            return true;
+        }
+    }).filter( e => e != "Node");
+
+    names = names.filter( e => !e.match(/^on/));
+
+    names = names.filter( e => !e.match(/^webkit/))
+    console.log(names)
+</script>
